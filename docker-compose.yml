@@ -1,0 +1,32 @@
+version: "3.8"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment: { POSTGRES_DB: videoplatform, POSTGRES_USER: videoplatform, POSTGRES_PASSWORD: videoplatform }
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-LINE", "pg_isready -U videoplatform"], interval: 10s, retries: 5 }
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment: { MINIO_ROOT_USER: minioadmin, MINIO_ROOT_PASSWORD: minioadmin }
+    ports: ["9000:9000", "9001:9001"]
+  backend:
+    build: ./backend
+    ports: ["8000:8000"]
+    depends_on: { postgres: { condition: service_healthy } }
+    environment: { DATABASE_URL: "postgresql+asyncpg://videoplatform:videoplatform@postgres:5432/video_platform", REDIS_URL: "redis://redis:6379/0", MINIO_ENDPOINT: "minio:9000" }
+  celery-worker:
+    build: ./backend
+    command: celery -A app.tasks.celery_app worker -l info
+    depends_on: [backend]
+    environment: { DATABASE_URL: "postgresql+asyncpg://videoplatform:videoplatform@postgres:5432/video_platform", CELERY_BROKER_URL: "redis://redis:6379/1" }
+  frontend:
+    build: ./frontend
+    ports: ["3000:80"]
+    depends_on: [backend]
+volumes:
+  pgdata:

@@ -1,0 +1,1 @@
+"""Video Platform backend application."""
